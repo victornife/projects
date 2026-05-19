@@ -69,6 +69,125 @@ def normalize_color(color: str) -> str:
     return c
 
 
+def _draw_header(draw: ImageDraw.ImageDraw, card_name: str, accent_color: tuple) -> None:
+    """Draw card header with name.
+    
+    Args:
+        draw: ImageDraw object.
+        card_name: Name to display in header.
+        accent_color: Color for outline and text accents.
+    """
+    header_h = 84
+    draw.rounded_rectangle(
+        [(MARGIN + 10, MARGIN + 10), (CARD_W - MARGIN - 10, MARGIN + 10 + header_h)],
+        radius=16,
+        fill=(245, 245, 245),
+        outline=accent_color,
+        width=3,
+    )
+    name_font = load_font(40, bold=True)
+    draw.text((MARGIN + 26, MARGIN + 30), card_name, fill=(20, 20, 20), font=name_font)
+
+
+def _draw_art_box(card: Image.Image, draw: ImageDraw.ImageDraw, art_path: Path,
+                  accent_color: tuple) -> int:
+    """Draw art box and paste artwork.
+    
+    Args:
+        card: PIL Image object for the card.
+        draw: ImageDraw object.
+        art_path: Path to artwork image.
+        accent_color: Color for box outline.
+        
+    Returns:
+        Y-coordinate after the art box.
+    """
+    art_top = MARGIN + 115
+    art_h = 460
+    art_box = (MARGIN + 18, art_top, CARD_W - MARGIN - 18, art_top + art_h)
+    draw.rectangle(art_box, outline=accent_color, width=4)
+
+    art = Image.open(art_path).convert("RGB")
+    art = ImageOps.fit(
+        art,
+        (art_box[2] - art_box[0] - 6, art_box[3] - art_box[1] - 6),
+        method=Image.Resampling.LANCZOS,
+    )
+    card.paste(art, (art_box[0] + 3, art_box[1] + 3))
+    return art_box[3]
+
+
+def _draw_type_line(draw: ImageDraw.ImageDraw, color: str, accent_color: tuple,
+                    art_bottom: int) -> int:
+    """Draw type line for the card.
+    
+    Args:
+        draw: ImageDraw object.
+        color: Card color name.
+        accent_color: Color for outline.
+        art_bottom: Y-coordinate of art box bottom.
+        
+    Returns:
+        Y-coordinate after type line.
+    """
+    type_y = art_bottom + 18
+    type_h = 60
+    draw.rounded_rectangle(
+        [(MARGIN + 12, type_y), (CARD_W - MARGIN - 12, type_y + type_h)],
+        radius=12,
+        fill=(245, 245, 245),
+        outline=accent_color,
+        width=3,
+    )
+    type_font = load_font(28, bold=True)
+    draw.text(
+        (MARGIN + 28, type_y + 15),
+        f"Legendary Artifact — {color.title()}",
+        fill=(18, 18, 18),
+        font=type_font,
+    )
+    return type_y + type_h
+
+
+def _draw_text_box(draw: ImageDraw.ImageDraw, style_text: str, accent_color: tuple,
+                   textbox_color: tuple, text_top: int) -> None:
+    """Draw text box with ability text.
+    
+    Args:
+        draw: ImageDraw object.
+        style_text: Text to display in box.
+        accent_color: Color for outline.
+        textbox_color: Fill color for text box.
+        text_top: Y-coordinate for top of text box.
+    """
+    text_box = (MARGIN + 12, text_top, CARD_W - MARGIN - 12, CARD_H - MARGIN - 40)
+    draw.rounded_rectangle(
+        text_box, radius=14, fill=textbox_color, outline=accent_color, width=3
+    )
+
+    rules_font = load_font(28)
+    x, y = text_box[0] + 18, text_box[1] + 16
+    for line in wrap(style_text, width=44):
+        draw.text((x, y), line, fill=(24, 24, 24), font=rules_font)
+        y += 36
+
+
+def _draw_signature(draw: ImageDraw.ImageDraw, accent_color: tuple) -> None:
+    """Draw signature line at bottom of card.
+    
+    Args:
+        draw: ImageDraw object.
+        accent_color: Color for text.
+    """
+    sig_font = load_font(22)
+    draw.text(
+        (MARGIN + 24, CARD_H - MARGIN - 30),
+        "Magicanize Everything",
+        fill=accent_color,
+        font=sig_font,
+    )
+
+
 def make_card(
     art_path: Path,
     output_path: Path,
@@ -111,71 +230,13 @@ def make_card(
         width=4,
     )
 
-    # Header
-    header_h = 84
-    draw.rounded_rectangle(
-        [(MARGIN + 10, MARGIN + 10), (CARD_W - MARGIN - 10, MARGIN + 10 + header_h)],
-        radius=16,
-        fill=(245, 245, 245),
-        outline=theme["accent"],
-        width=3,
-    )
-    name_font = load_font(40, bold=True)
-    draw.text((MARGIN + 26, MARGIN + 30), card_name, fill=(20, 20, 20), font=name_font)
-
-    # Art box
-    art_top = MARGIN + 115
-    art_h = 460
-    art_box = (MARGIN + 18, art_top, CARD_W - MARGIN - 18, art_top + art_h)
-    draw.rectangle(art_box, outline=theme["accent"], width=4)
-
-    art = Image.open(art_path).convert("RGB")
-    art = ImageOps.fit(
-        art,
-        (art_box[2] - art_box[0] - 6, art_box[3] - art_box[1] - 6),
-        method=Image.Resampling.LANCZOS,
-    )
-    card.paste(art, (art_box[0] + 3, art_box[1] + 3))
-
-    # Type line
-    type_y = art_box[3] + 18
-    type_h = 60
-    draw.rounded_rectangle(
-        [(MARGIN + 12, type_y), (CARD_W - MARGIN - 12, type_y + type_h)],
-        radius=12,
-        fill=(245, 245, 245),
-        outline=theme["accent"],
-        width=3,
-    )
-    type_font = load_font(28, bold=True)
-    draw.text(
-        (MARGIN + 28, type_y + 15),
-        f"Legendary Artifact — {color.title()}",
-        fill=(18, 18, 18),
-        font=type_font,
-    )
-
-    # Text box
-    text_top = type_y + type_h + 16
-    text_box = (MARGIN + 12, text_top, CARD_W - MARGIN - 12, CARD_H - MARGIN - 40)
-    draw.rounded_rectangle(
-        text_box, radius=14, fill=theme["textbox"], outline=theme["accent"], width=3
-    )
-
-    rules_font = load_font(28)
-    x, y = text_box[0] + 18, text_box[1] + 16
-    for line in wrap(style_text, width=44):
-        draw.text((x, y), line, fill=(24, 24, 24), font=rules_font)
-        y += 36
-
-    # Signature line
-    sig_font = load_font(22)
-    draw.text(
-        (MARGIN + 24, CARD_H - MARGIN - 30),
-        "Magicanize Everything",
-        fill=theme["accent"],
-        font=sig_font,
-    )
+    # Draw card sections
+    _draw_header(draw, card_name, theme["accent"])
+    art_bottom = _draw_art_box(card, draw, art_path, theme["accent"])
+    type_bottom = _draw_type_line(draw, color, theme["accent"], art_bottom)
+    text_top = type_bottom + 16
+    _draw_text_box(draw, style_text, theme["accent"], theme["textbox"], text_top)
+    _draw_signature(draw, theme["accent"])
 
     final = Image.new("RGBA", (CARD_W, CARD_H))
     final.paste(card, (0, 0))
