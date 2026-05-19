@@ -1,3 +1,4 @@
+"""Microsoft Teams auto-reply agent using OpenAI and Microsoft Graph API."""
 import os
 import time
 from typing import Any
@@ -29,6 +30,14 @@ _graph_token_cache: dict[str, Any] = {"token": None, "exp": 0}
 
 
 def get_graph_token() -> str:
+    """Retrieve or refresh Microsoft Graph API token from cache.
+
+    Returns:
+        Valid access token for Microsoft Graph API
+
+    Raises:
+        RuntimeError: If credentials are missing
+    """
     now = int(time.time())
     cached = _graph_token_cache.get("token")
     exp = _graph_token_cache.get("exp", 0)
@@ -59,6 +68,17 @@ def get_graph_token() -> str:
 
 
 def get_message_context(chat_id: str, message_id: str, token: str, limit: int = 8) -> str:
+    """Fetch recent chat messages for context.
+
+    Args:
+        chat_id: Microsoft Teams chat ID
+        message_id: Message ID to fetch context for
+        token: Bearer token for API access
+        limit: Number of messages to retrieve
+
+    Returns:
+        Formatted message context string
+    """
     headers = {"Authorization": f"Bearer {token}"}
     messages_url = (
         f"https://graph.microsoft.com/v1.0/chats/{chat_id}/messages"
@@ -82,6 +102,15 @@ def get_message_context(chat_id: str, message_id: str, token: str, limit: int = 
 
 
 def generate_reply(context: str, incoming_text: str) -> str:
+    """Generate AI reply using OpenAI API.
+
+    Args:
+        context: Previous message context
+        incoming_text: Latest message to reply to
+
+    Returns:
+        Generated reply text
+    """
     completion = openai_client.responses.create(
         model=OPENAI_MODEL,
         input=[
@@ -102,6 +131,13 @@ def generate_reply(context: str, incoming_text: str) -> str:
 
 
 def send_reply(chat_id: str, reply_text: str, token: str) -> None:
+    """Send reply message to Teams chat.
+
+    Args:
+        chat_id: Target chat ID
+        reply_text: Message text to send
+        token: Bearer token for API access
+    """
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
@@ -114,62 +150,96 @@ def send_reply(chat_id: str, reply_text: str, token: str) -> None:
         resp.raise_for_status()
 
 
+async def _process_notification(notification: dict[str, Any]) -> dict[str, Any]:
+    """Process individual Teams notification.
+
+    Args:
+        notification: Notification payload
+
+    Returns:
+        Processing result with status
+    """
+    resource_data = notification.get("resourceData", {})
+    chat_id = resource_data.get("chatId")
+    message_id = resource_data.get("id")
+    from_user = resource_data.get("from", {}).get("user", {})
+    sender_id = from_user.get("id")
+
+    if not chat_id or not message_id:
+        return {"status": "skipped_missing_data"}
+
+    if ALLOWED_CONTACT_IDS and sender_id not in ALLOWED_CONTACT_IDS:
+        return {"chatId": chat_id, "status": "ignored_not_allowed"}
+
+    try:
+        token = get_graph_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        message_url = (
+            f"https://graph.microsoft.com/v1.0/chats/{chat_id}/messages/{message_id}"
+        )
+        with httpx.Client(timeout=20) as client:
+            message_resp = client.get(message_url, headers=headers)
+            message_resp.raise_for_status()
+            message = message_resp.json()
+
+        incoming_text = message.get("body", {}).get("content", "")
+        context = get_message_context(
+            chat_id=chat_id, message_id=message_id, token=token
+        )
+        reply = generate_reply(context=context, incoming_text=incoming_text)
+        send_reply(chat_id=chat_id, reply_text=reply, token=token)
+        return {"chatId": chat_id, "status": "replied"}
+    except TimeoutError as exc:
+        return {"chatId": chat_id, "status": "error", "error": f"Timeout: {exc}"}
+    except RuntimeError as exc:
+        return {"chatId": chat_id, "status": "error", "error": f"Runtime error: {exc}"}
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
+    """Health check endpoint."""
     return {"status": "ok"}
 
 
 @app.post("/webhooks/teams")
 async def teams_webhook(
     request: Request,
-    validationToken: str | None = Query(default=None),
+    validation_token: str | None = Query(default=None),
 ) -> Any:
-    if validationToken:
-        return validationToken
+    """Handle incoming Teams webhook notifications.
+
+    Args:
+        request: HTTP request
+        validation_token: Optional validation token from Teams
+
+    Returns:
+        Validation token or processing results
+    """
+    if validation_token:
+        return validation_token
 
     payload = await request.json()
     notifications = payload.get("value", [])
     results = []
 
-    for n in notifications:
-        resource_data = n.get("resourceData", {})
-        chat_id = resource_data.get("chatId")
-        message_id = resource_data.get("id")
-        from_user = resource_data.get("from", {}).get("user", {})
-        sender_id = from_user.get("id")
-
-        if not chat_id or not message_id:
-            continue
-
-        if ALLOWED_CONTACT_IDS and sender_id not in ALLOWED_CONTACT_IDS:
-            results.append({"chatId": chat_id, "status": "ignored_not_allowed"})
-            continue
-
-        try:
-            token = get_graph_token()
-            headers = {"Authorization": f"Bearer {token}"}
-            message_url = f"https://graph.microsoft.com/v1.0/chats/{chat_id}/messages/{message_id}"
-            with httpx.Client(timeout=20) as client:
-                message_resp = client.get(message_url, headers=headers)
-                message_resp.raise_for_status()
-                message = message_resp.json()
-
-            incoming_text = message.get("body", {}).get("content", "")
-            context = get_message_context(chat_id=chat_id, message_id=message_id, token=token)
-            reply = generate_reply(context=context, incoming_text=incoming_text)
-            send_reply(chat_id=chat_id, reply_text=reply, token=token)
-            results.append({"chatId": chat_id, "status": "replied"})
-        except Exception as exc:
-            results.append({"chatId": chat_id, "status": "error", "error": str(exc)})
+    for notification in notifications:
+        result = await _process_notification(notification)
+        results.append(result)
 
     return {"processed": results}
 
 
 @app.post("/subscriptions/create")
 def create_subscription() -> dict[str, Any]:
-    """
-    Convenience endpoint to create a Microsoft Graph subscription for chat messages.
-    You should normally run this once after deployment.
+    """Convenience endpoint to create a Microsoft Graph subscription for chat messages.
+
+    This endpoint should normally be run once after deployment.
+
+    Returns:
+        Subscription creation response
+
+    Raises:
+        HTTPException: If PUBLIC_BASE_URL is not set
     """
     public_base = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
     if not public_base:
@@ -189,6 +259,10 @@ def create_subscription() -> dict[str, Any]:
     }
 
     with httpx.Client(timeout=20) as client:
-        resp = client.post("https://graph.microsoft.com/v1.0/subscriptions", headers=headers, json=payload)
+        resp = client.post(
+            "https://graph.microsoft.com/v1.0/subscriptions",
+            headers=headers,
+            json=payload,
+        )
         resp.raise_for_status()
         return resp.json()
