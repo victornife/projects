@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Card generator for creating Magic-style cards from images."""
 from __future__ import annotations
 
 import argparse
@@ -20,8 +21,19 @@ COLOR_THEMES = {
 
 
 def load_font(size: int, bold: bool = False) -> ImageFont.ImageFont:
+    """Load TrueType font or fallback to default font.
+
+    Args:
+        size: Font size in pixels
+        bold: Whether to load bold variant
+
+    Returns:
+        ImageFont object
+    """
     candidates = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+        if bold
+        else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/Library/Fonts/Arial.ttf",
         "arial.ttf",
     ]
@@ -34,6 +46,17 @@ def load_font(size: int, bold: bool = False) -> ImageFont.ImageFont:
 
 
 def normalize_color(color: str) -> str:
+    """Normalize color name to standard format.
+
+    Args:
+        color: Color name (supports aliases like 'w' for 'white')
+
+    Returns:
+        Normalized color name
+
+    Raises:
+        ValueError: If color is not supported
+    """
     c = color.strip().lower()
     aliases = {"w": "white", "u": "blue", "b": "black", "r": "red", "g": "green", "c": "colorless"}
     c = aliases.get(c, c)
@@ -42,7 +65,22 @@ def normalize_color(color: str) -> str:
     return c
 
 
-def make_card(art_path: Path, output_path: Path, color: str, style_text: str, card_name: str = "Magicanized Relic") -> None:
+def make_card(
+    art_path: Path,
+    output_path: Path,
+    color: str,
+    style_text: str,
+    card_name: str = "Magicanized Relic",
+) -> None:
+    """Create a Magic-style card from an image.
+
+    Args:
+        art_path: Path to source art image
+        output_path: Path to save output card
+        color: Card color theme
+        style_text: Card ability text
+        card_name: Name to display on card
+    """
     theme = COLOR_THEMES[color]
 
     card = Image.new("RGB", (CARD_W, CARD_H), theme["frame"])
@@ -50,11 +88,24 @@ def make_card(art_path: Path, output_path: Path, color: str, style_text: str, ca
 
     outer_radius = 36
     mask = Image.new("L", (CARD_W, CARD_H), 0)
-    ImageDraw.Draw(mask).rounded_rectangle([(0, 0), (CARD_W - 1, CARD_H - 1)], radius=outer_radius, fill=255)
+    ImageDraw.Draw(mask).rounded_rectangle(
+        [(0, 0), (CARD_W - 1, CARD_H - 1)], radius=outer_radius, fill=255
+    )
 
     # Outer and inner frame
-    draw.rounded_rectangle([(0, 0), (CARD_W - 1, CARD_H - 1)], radius=outer_radius, fill=theme["frame"], outline=theme["accent"], width=8)
-    draw.rounded_rectangle([(MARGIN, MARGIN), (CARD_W - MARGIN, CARD_H - MARGIN)], radius=22, outline=theme["accent"], width=4)
+    draw.rounded_rectangle(
+        [(0, 0), (CARD_W - 1, CARD_H - 1)],
+        radius=outer_radius,
+        fill=theme["frame"],
+        outline=theme["accent"],
+        width=8,
+    )
+    draw.rounded_rectangle(
+        [(MARGIN, MARGIN), (CARD_W - MARGIN, CARD_H - MARGIN)],
+        radius=22,
+        outline=theme["accent"],
+        width=4,
+    )
 
     # Header
     header_h = 84
@@ -75,7 +126,11 @@ def make_card(art_path: Path, output_path: Path, color: str, style_text: str, ca
     draw.rectangle(art_box, outline=theme["accent"], width=4)
 
     art = Image.open(art_path).convert("RGB")
-    art = ImageOps.fit(art, (art_box[2] - art_box[0] - 6, art_box[3] - art_box[1] - 6), method=Image.Resampling.LANCZOS)
+    art = ImageOps.fit(
+        art,
+        (art_box[2] - art_box[0] - 6, art_box[3] - art_box[1] - 6),
+        method=Image.Resampling.LANCZOS,
+    )
     card.paste(art, (art_box[0] + 3, art_box[1] + 3))
 
     # Type line
@@ -89,12 +144,19 @@ def make_card(art_path: Path, output_path: Path, color: str, style_text: str, ca
         width=3,
     )
     type_font = load_font(28, bold=True)
-    draw.text((MARGIN + 28, type_y + 15), f"Legendary Artifact — {color.title()}", fill=(18, 18, 18), font=type_font)
+    draw.text(
+        (MARGIN + 28, type_y + 15),
+        f"Legendary Artifact — {color.title()}",
+        fill=(18, 18, 18),
+        font=type_font,
+    )
 
     # Text box
     text_top = type_y + type_h + 16
     text_box = (MARGIN + 12, text_top, CARD_W - MARGIN - 12, CARD_H - MARGIN - 40)
-    draw.rounded_rectangle(text_box, radius=14, fill=theme["textbox"], outline=theme["accent"], width=3)
+    draw.rounded_rectangle(
+        text_box, radius=14, fill=theme["textbox"], outline=theme["accent"], width=3
+    )
 
     rules_font = load_font(28)
     x, y = text_box[0] + 18, text_box[1] + 16
@@ -104,7 +166,12 @@ def make_card(art_path: Path, output_path: Path, color: str, style_text: str, ca
 
     # Signature line
     sig_font = load_font(22)
-    draw.text((MARGIN + 24, CARD_H - MARGIN - 30), "Magicanize Everything", fill=theme["accent"], font=sig_font)
+    draw.text(
+        (MARGIN + 24, CARD_H - MARGIN - 30),
+        "Magicanize Everything",
+        fill=theme["accent"],
+        font=sig_font,
+    )
 
     final = Image.new("RGBA", (CARD_W, CARD_H))
     final.paste(card, (0, 0))
@@ -115,23 +182,44 @@ def make_card(art_path: Path, output_path: Path, color: str, style_text: str, ca
 
 
 def prompt_if_missing(value: str | None, prompt: str) -> str:
+    """Prompt user for input if value is missing.
+
+    Args:
+        value: Optional value
+        prompt: Prompt text to display
+
+    Returns:
+        Provided value or user input
+    """
     if value:
         return value
     return input(prompt).strip()
 
 
 def main() -> None:
+    """Main entry point for card generation CLI."""
     parser = argparse.ArgumentParser(description="Create a Magic-style card from an image.")
     parser.add_argument("--input", type=str, help="Path to source art image")
-    parser.add_argument("--output", type=str, help="Output card image path", default="magicanized_card.png")
-    parser.add_argument("--color", type=str, help="Card color (white/blue/black/red/green/colorless)")
-    parser.add_argument("--style-text", type=str, help='Card "style text" to render in text box')
+    parser.add_argument(
+        "--output",
+        type=str,
+        help="Output card image path",
+        default="magicanized_card.png",
+    )
+    parser.add_argument(
+        "--color", type=str, help="Card color (white/blue/black/red/green/colorless)"
+    )
+    parser.add_argument(
+        "--style-text", type=str, help='Card "style text" to render in text box'
+    )
     parser.add_argument("--name", type=str, help="Card name", default="Magicanized Relic")
     args = parser.parse_args()
 
     input_path = prompt_if_missing(args.input, "Image path: ")
-    color_raw = prompt_if_missing(args.color, "Color (white/blue/black/red/green/colorless): ")
-    style_text = prompt_if_missing(args.style_text, 'Style text: ')
+    color_raw = prompt_if_missing(
+        args.color, "Color (white/blue/black/red/green/colorless): "
+    )
+    style_text = prompt_if_missing(args.style_text, "Style text: ")
 
     color = normalize_color(color_raw)
 
