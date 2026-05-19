@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Card generator for creating Magic-style cards from images."""
+"""Create Magic-style trading cards from images and custom text."""
 from __future__ import annotations
 
 import argparse
@@ -21,19 +21,21 @@ COLOR_THEMES = {
 
 
 def load_font(size: int, bold: bool = False) -> ImageFont.ImageFont:
-    """Load TrueType font or fallback to default font.
-
+    """Load a TrueType font from system paths or fallback to default.
+    
     Args:
-        size: Font size in pixels
-        bold: Whether to load bold variant
-
+        size: Font size in pixels.
+        bold: Whether to load bold variant.
+        
     Returns:
-        ImageFont object
+        ImageFont object.
     """
     candidates = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-        if bold
-        else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        (
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+            if bold
+            else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+        ),
         "/Library/Fonts/Arial.ttf",
         "arial.ttf",
     ]
@@ -46,16 +48,18 @@ def load_font(size: int, bold: bool = False) -> ImageFont.ImageFont:
 
 
 def normalize_color(color: str) -> str:
-    """Normalize color name to standard format.
-
+    """Normalize and validate color name.
+    
+    Supports aliases: w=white, u=blue, b=black, r=red, g=green, c=colorless.
+    
     Args:
-        color: Color name (supports aliases like 'w' for 'white')
-
+        color: Color name or alias.
+        
     Returns:
-        Normalized color name
-
+        Normalized color name.
+        
     Raises:
-        ValueError: If color is not supported
+        ValueError: If color is not supported.
     """
     c = color.strip().lower()
     aliases = {"w": "white", "u": "blue", "b": "black", "r": "red", "g": "green", "c": "colorless"}
@@ -72,14 +76,14 @@ def make_card(
     style_text: str,
     card_name: str = "Magicanized Relic",
 ) -> None:
-    """Create a Magic-style card from an image.
-
+    """Create a Magic-style card and save to file.
+    
     Args:
-        art_path: Path to source art image
-        output_path: Path to save output card
-        color: Card color theme
-        style_text: Card ability text
-        card_name: Name to display on card
+        art_path: Path to source artwork image.
+        output_path: Path where card image will be saved.
+        color: Card color theme name.
+        style_text: Card ability text to render.
+        card_name: Card title (default: "Magicanized Relic").
     """
     theme = COLOR_THEMES[color]
 
@@ -183,13 +187,13 @@ def make_card(
 
 def prompt_if_missing(value: str | None, prompt: str) -> str:
     """Prompt user for input if value is missing.
-
+    
     Args:
-        value: Optional value
-        prompt: Prompt text to display
-
+        value: Existing value (if any).
+        prompt: Prompt text to display.
+        
     Returns:
-        Provided value or user input
+        Provided or prompted value.
     """
     if value:
         return value
@@ -197,21 +201,16 @@ def prompt_if_missing(value: str | None, prompt: str) -> str:
 
 
 def main() -> None:
-    """Main entry point for card generation CLI."""
+    """Main entry point for card creation."""
     parser = argparse.ArgumentParser(description="Create a Magic-style card from an image.")
     parser.add_argument("--input", type=str, help="Path to source art image")
     parser.add_argument(
-        "--output",
-        type=str,
-        help="Output card image path",
-        default="magicanized_card.png",
+        "--output", type=str, help="Output card image path", default="magicanized_card.png"
     )
     parser.add_argument(
         "--color", type=str, help="Card color (white/blue/black/red/green/colorless)"
     )
-    parser.add_argument(
-        "--style-text", type=str, help='Card "style text" to render in text box'
-    )
+    parser.add_argument("--style-text", type=str, help='Card "style text" to render in text box')
     parser.add_argument("--name", type=str, help="Card name", default="Magicanized Relic")
     args = parser.parse_args()
 

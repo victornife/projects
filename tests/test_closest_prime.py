@@ -1,4 +1,4 @@
-"""Tests for closest_prime module."""
+"""Test module for closest prime number finder."""
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
@@ -23,7 +23,7 @@ def test_closest_prime_exact_prime():
 
 
 def test_closest_prime_lower_tie_breaker():
-    """Test closest_prime returns lower prime when equidistant."""
+    """Test closest_prime tie-breaker prefers lower prime."""
     assert closest_prime_module.closest_prime(12) == 11
 
 
