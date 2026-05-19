@@ -67,12 +67,11 @@ def get_graph_token() -> str:
     return token
 
 
-def get_message_context(chat_id: str, message_id: str, token: str, limit: int = 8) -> str:
+def get_message_context(chat_id: str, token: str, limit: int = 8) -> str:
     """Fetch conversation context from a Teams chat.
     
     Args:
         chat_id: Teams chat identifier.
-        message_id: Specific message ID (for reference).
         token: Microsoft Graph API access token.
         limit: Number of recent messages to fetch (default: 8).
         
@@ -184,11 +183,10 @@ async def teams_webhook(
     for n in notifications:
         resource_data = n.get("resourceData", {})
         chat_id = resource_data.get("chatId")
-        message_id = resource_data.get("id")
         from_user = resource_data.get("from", {}).get("user", {})
         sender_id = from_user.get("id")
 
-        if not chat_id or not message_id:
+        if not chat_id:
             continue
 
         if ALLOWED_CONTACT_IDS and sender_id not in ALLOWED_CONTACT_IDS:
@@ -198,6 +196,7 @@ async def teams_webhook(
         try:
             token = get_graph_token()
             headers = {"Authorization": f"Bearer {token}"}
+            message_id = resource_data.get("id")
             message_url = (
                 f"https://graph.microsoft.com/v1.0/chats/{chat_id}/messages"
                 f"/{message_id}"
@@ -208,13 +207,11 @@ async def teams_webhook(
                 message = message_resp.json()
 
             incoming_text = message.get("body", {}).get("content", "")
-            context = get_message_context(
-                chat_id=chat_id, message_id=message_id, token=token
-            )
+            context = get_message_context(chat_id=chat_id, token=token)
             reply = generate_reply(context=context, incoming_text=incoming_text)
             send_reply(chat_id=chat_id, reply_text=reply, token=token)
             results.append({"chatId": chat_id, "status": "replied"})
-        except Exception as exc:
+        except (RuntimeError, httpx.HTTPError, ValueError) as exc:
             results.append({"chatId": chat_id, "status": "error", "error": str(exc)})
 
     return {"processed": results}
