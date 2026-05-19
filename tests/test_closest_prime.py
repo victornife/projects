@@ -1,9 +1,11 @@
 """Test module for closest prime number finder."""
-from importlib.machinery import SourceFileLoader
+import importlib.util
 from pathlib import Path
 
 module_path = Path(__file__).resolve().parents[1] / "closest-prime-project" / "closest_prime.py"
-closest_prime_module = SourceFileLoader("closest_prime", str(module_path)).load_module()
+spec = importlib.util.spec_from_file_location("closest_prime", str(module_path))
+closest_prime_module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(closest_prime_module)
 
 
 def test_is_prime_basic_cases():
